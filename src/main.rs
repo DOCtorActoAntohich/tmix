@@ -29,7 +29,7 @@ struct TmuxState {
 impl TmuxState {
     fn load() -> anyhow::Result<Self> {
         let sessions = Self::list_sessions();
-        let cwd = std::env::current_dir().context("failed to get current directory")?;
+        let cwd = std::env::current_dir().context("Failed to get the current directory")?;
         Ok(Self { sessions, cwd })
     }
 
@@ -251,9 +251,11 @@ impl App {
 
     fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> anyhow::Result<Action> {
         loop {
-            terminal.draw(|frame| self.draw(frame))?;
+            terminal
+                .draw(|frame| self.draw(frame))
+                .context("Failed to render the frame")?;
 
-            let Event::Key(key) = event::read()? else {
+            let Event::Key(key) = event::read().context("Failed to receive event")? else {
                 continue;
             };
 
