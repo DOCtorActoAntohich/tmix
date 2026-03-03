@@ -25,6 +25,7 @@
         ];
         pkgs = import nixpkgs { inherit system overlays; };
 
+        musl-pkgs = if pkgs.stdenv.isLinux then pkgs.pkgsMusl else pkgs;
         rust-stable = pkgs.rust-bin.stable."1.93.0".minimal;
         rust = {
           dev = rust-stable.override {
@@ -41,11 +42,16 @@
               "clippy"
             ];
           };
-          build = rust-stable;
+          build = rust-stable.override {
+            targets = pkgs.lib.optionals pkgs.stdenv.isLinux [
+              pkgs.pkgsMusl.stdenv.hostPlatform.rust.rustcTarget
+            ];
+          };
         };
 
         tmix = pkgs.callPackage ./nix/tmix.nix {
           inherit nix-filter;
+          inherit (musl-pkgs) stdenv;
           rust-toolchain = rust.build;
         };
       in

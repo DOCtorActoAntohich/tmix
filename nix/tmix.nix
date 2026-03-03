@@ -1,5 +1,6 @@
 {
   lib,
+  stdenv,
   makeRustPlatform,
 
   nix-filter,
@@ -9,6 +10,7 @@ let
   rust-platform = makeRustPlatform {
     cargo = rust-toolchain;
     rustc = rust-toolchain;
+    inherit stdenv;
   };
 
   find-package =
