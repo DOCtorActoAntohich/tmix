@@ -35,15 +35,54 @@
               "rust-src"
             ];
           };
+          ci = rust-stable.override {
+            extensions = [
+              "rustfmt"
+              "clippy"
+            ];
+          };
           build = rust-stable;
+        };
+
+        tmix = pkgs.callPackage ./nix/tmix.nix {
+          inherit nix-filter;
+          rust-toolchain = rust.build;
         };
       in
       {
         formatter = pkgs.nixfmt-tree;
 
+        packages = {
+          default = tmix;
+        };
+
         devShells = {
           default = pkgs.mkShell {
             packages = [ rust.dev ];
+          };
+        };
+
+        ci = {
+          cargo-fmt = pkgs.writeShellApplication {
+            name = "cargo-fmt";
+            text = "cargo fmt --all --check";
+            runtimeInputs = [
+              rust.ci
+            ];
+          };
+          cargo-clippy = pkgs.writeShellApplication {
+            name = "cargo-clippy";
+            text = "cargo clippy --workspace --tests --all-features -- -Dwarnings";
+            runtimeInputs = [
+              rust.ci
+            ];
+          };
+          cargo-test = pkgs.writeShellApplication {
+            name = "cargo-test";
+            text = "cargo test --workspace --all-features";
+            runtimeInputs = [
+              rust.ci
+            ];
           };
         };
       }
