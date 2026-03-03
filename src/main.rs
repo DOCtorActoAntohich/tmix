@@ -1,4 +1,3 @@
-use std::env;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
@@ -30,7 +29,7 @@ struct TmuxState {
 impl TmuxState {
     fn load() -> Result<Self> {
         let sessions = Self::list_sessions();
-        let cwd = env::current_dir().context("failed to get current directory")?;
+        let cwd = std::env::current_dir().context("failed to get current directory")?;
         Ok(Self { sessions, cwd })
     }
 
