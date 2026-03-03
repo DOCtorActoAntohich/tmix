@@ -248,27 +248,27 @@ impl App {
 
         None
     }
+
+    fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> anyhow::Result<Action> {
+        loop {
+            terminal.draw(|frame| self.draw(frame))?;
+
+            let Event::Key(key) = event::read()? else {
+                continue;
+            };
+
+            if let Some(action) = self.handle_key(key) {
+                break Ok(action);
+            };
+        }
+    }
 }
 
 fn run_tui(app: &mut App) -> anyhow::Result<Action> {
     let mut terminal = ratatui::init();
-    let result = event_loop(&mut terminal, app);
+    let result = app.run(&mut terminal);
     ratatui::restore();
     result
-}
-
-fn event_loop(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> anyhow::Result<Action> {
-    loop {
-        terminal.draw(|frame| app.draw(frame))?;
-
-        let Event::Key(key) = event::read()? else {
-            continue;
-        };
-
-        if let Some(action) = app.handle_key(key) {
-            break Ok(action);
-        };
-    }
 }
 
 fn main() -> anyhow::Result<()> {
