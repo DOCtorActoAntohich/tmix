@@ -59,6 +59,7 @@
         formatter = pkgs.nixfmt-tree;
 
         packages = {
+          inherit tmix;
           default = tmix;
         };
 
