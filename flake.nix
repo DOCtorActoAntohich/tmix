@@ -17,7 +17,19 @@
       flake-utils,
       nix-filter,
     }:
-    flake-utils.lib.eachDefaultSystem (
+    {
+      overlays = {
+        tmix =
+          final: prev:
+          let
+            system = prev.stdenv.hostPlatform.system;
+          in
+          {
+            tmix = self.packages.${system}.tmix;
+          };
+      };
+    }
+    // flake-utils.lib.eachDefaultSystem (
       system:
       let
         overlays = [
