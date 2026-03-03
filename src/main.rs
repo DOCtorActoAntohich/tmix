@@ -5,7 +5,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph};
@@ -84,14 +84,19 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut ratatui::Frame) {
-        let area = frame.area();
-
-        let columns = Layout::default()
+        let [session_list_area, new_session_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-            .split(area);
+            .areas::<2>(frame.area());
 
-        let left_border_style = if self.focus == Panel::Sessions {
+        self.draw_sessions_list(frame, session_list_area);
+        self.draw_new_session_window(frame, new_session_area);
+    }
+
+    fn draw_sessions_list(&mut self, frame: &mut ratatui::Frame, area: Rect) {
+        let active = self.focus == Panel::Sessions;
+
+        let border_style = if active {
             Style::default().fg(Color::Cyan)
         } else {
             Style::default().fg(Color::DarkGray)
@@ -99,7 +104,7 @@ impl App {
 
         let items: Vec<ListItem> = if self.tmux.sessions.is_empty() {
             vec![ListItem::new(Line::from(Span::styled(
-                "no sessions",
+                "<no sessions>",
                 Style::default().fg(Color::DarkGray),
             )))]
         } else {
@@ -110,7 +115,7 @@ impl App {
                 .collect()
         };
 
-        let highlight_style = if self.focus == Panel::Sessions {
+        let highlight_style = if active {
             Style::default()
                 .fg(Color::Black)
                 .bg(Color::Cyan)
@@ -119,43 +124,40 @@ impl App {
             Style::default()
         };
 
-        let highlight_symbol = if self.focus == Panel::Sessions {
-            "> "
-        } else {
-            "  "
-        };
-
         let list = List::new(items)
             .block(
                 Block::default()
-                    .title(" sessions ")
+                    .title(" Attach to an existing session ")
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(left_border_style),
+                    .border_style(border_style),
             )
             .highlight_style(highlight_style)
-            .highlight_symbol(highlight_symbol);
+            .highlight_symbol(if active { "> " } else { "  " });
 
-        frame.render_stateful_widget(list, columns[0], &mut self.list_state);
+        frame.render_stateful_widget(list, area, &mut self.list_state);
+    }
 
-        // right panel: new session
-        let right_border_style = if self.focus == Panel::New {
+    fn draw_new_session_window(&self, frame: &mut ratatui::Frame, area: Rect) {
+        let active = self.focus == Panel::New;
+
+        let border_style = if active {
             Style::default().fg(Color::Cyan)
         } else {
             Style::default().fg(Color::DarkGray)
         };
 
         let cwd_line = Line::from(vec![
-            Span::styled("cwd  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("At:  ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 self.tmux.cwd.display().to_string(),
-                Style::default().fg(Color::White),
+                Style::default().fg(Color::Green),
             ),
         ]);
 
-        let hint = if self.focus == Panel::New {
+        let hint = if active {
             Line::from(Span::styled(
-                "press enter to create",
+                "press Enter to create",
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
@@ -166,13 +168,13 @@ impl App {
 
         let paragraph = Paragraph::new(vec![cwd_line, Line::from(""), hint]).block(
             Block::default()
-                .title(" new session ")
+                .title(" Start new session ")
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .border_style(right_border_style),
+                .border_style(border_style),
         );
 
-        frame.render_widget(paragraph, columns[1]);
+        frame.render_widget(paragraph, area);
     }
 
     fn handle_key(&mut self, key: ratatui::crossterm::event::KeyEvent) -> Option<Action> {
