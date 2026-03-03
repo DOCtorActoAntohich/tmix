@@ -8,7 +8,7 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Panel {
@@ -84,13 +84,42 @@ impl App {
     }
 
     fn draw(&mut self, frame: &mut ratatui::Frame) {
+        let [main_area, help_bar_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0), Constraint::Length(1)])
+            .areas::<2>(frame.area());
+
         let [session_list_area, new_session_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-            .areas::<2>(frame.area());
+            .areas::<2>(main_area);
 
         self.draw_sessions_list(frame, session_list_area);
         self.draw_new_session_window(frame, new_session_area);
+        self.draw_help_bar(frame, help_bar_area);
+    }
+
+    fn draw_help_bar(&self, frame: &mut ratatui::Frame, area: Rect) {
+        let bindings: &[(&str, &str)] = &[
+            ("Q / Esc", "Quit"),
+            ("↑↓", "Navigate"),
+            ("Tab / ←→", "Switch panel"),
+            ("Enter", "Confirm"),
+        ];
+
+        let spans: Vec<Span> = bindings
+            .iter()
+            .flat_map(|(key, description)| {
+                [
+                    Span::from(format!(" {key} "))
+                        .style(Style::default().fg(Color::Black).bg(Color::DarkGray)),
+                    Span::from(format!("  {description}  "))
+                        .style(Style::default().fg(Color::DarkGray)),
+                ]
+            })
+            .collect();
+
+        frame.render_widget(Paragraph::new(Line::from(spans)), area);
     }
 
     fn draw_sessions_list(&mut self, frame: &mut ratatui::Frame, area: Rect) {
@@ -103,10 +132,9 @@ impl App {
         };
 
         let items: Vec<ListItem> = if self.tmux.sessions.is_empty() {
-            vec![ListItem::new(Line::from(Span::styled(
-                "<no sessions>",
-                Style::default().fg(Color::DarkGray),
-            )))]
+            vec![ListItem::new(Line::from(
+                Span::from("<no sessions>").style(Style::default().fg(Color::DarkGray)),
+            ))]
         } else {
             self.tmux
                 .sessions
@@ -148,7 +176,7 @@ impl App {
         };
 
         let cwd_line = Line::from(vec![
-            Span::styled("At:  ", Style::default().fg(Color::DarkGray)),
+            Span::styled("At path:  ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 self.tmux.cwd.display().to_string(),
                 Style::default().fg(Color::Green),
@@ -157,7 +185,7 @@ impl App {
 
         let hint = if active {
             Line::from(Span::styled(
-                "press Enter to create",
+                "Press Enter to create",
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
@@ -166,13 +194,15 @@ impl App {
             Line::from("")
         };
 
-        let paragraph = Paragraph::new(vec![cwd_line, Line::from(""), hint]).block(
-            Block::default()
-                .title(" Start new session ")
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(border_style),
-        );
+        let paragraph = Paragraph::new(vec![cwd_line, Line::from(""), hint])
+            .wrap(Wrap { trim: false })
+            .block(
+                Block::default()
+                    .title(" Start new session ")
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(border_style),
+            );
 
         frame.render_widget(paragraph, area);
     }
