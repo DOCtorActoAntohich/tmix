@@ -265,11 +265,9 @@ fn event_loop(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<
             continue;
         };
 
-        let Some(action) = app.handle_key(key) else {
-            continue;
+        if let Some(action) = app.handle_key(key) {
+            break Ok(action);
         };
-
-        return Ok(action);
     }
 }
 
