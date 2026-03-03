@@ -2,7 +2,7 @@ use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -27,7 +27,7 @@ struct TmuxState {
 }
 
 impl TmuxState {
-    fn load() -> Result<Self> {
+    fn load() -> anyhow::Result<Self> {
         let sessions = Self::list_sessions();
         let cwd = std::env::current_dir().context("failed to get current directory")?;
         Ok(Self { sessions, cwd })
@@ -250,14 +250,14 @@ impl App {
     }
 }
 
-fn run_tui(app: &mut App) -> Result<Action> {
+fn run_tui(app: &mut App) -> anyhow::Result<Action> {
     let mut terminal = ratatui::init();
     let result = event_loop(&mut terminal, app);
     ratatui::restore();
     result
 }
 
-fn event_loop(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<Action> {
+fn event_loop(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> anyhow::Result<Action> {
     loop {
         terminal.draw(|frame| app.draw(frame))?;
 
@@ -271,7 +271,7 @@ fn event_loop(terminal: &mut ratatui::DefaultTerminal, app: &mut App) -> Result<
     }
 }
 
-fn main() -> Result<()> {
+fn main() -> anyhow::Result<()> {
     let tmux = TmuxState::load()?;
     let mut app = App::new(tmux);
 
