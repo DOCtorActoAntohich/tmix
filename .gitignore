@@ -14,6 +14,7 @@
 !.gitignore
 !Cargo.lock
 !Cargo.toml
+!LICENSE
 !README.md
 !flake.lock
 !flake.nix
