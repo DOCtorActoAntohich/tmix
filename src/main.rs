@@ -182,6 +182,18 @@ impl App {
             ),
         ]);
 
+        let name_line = Line::from(vec![
+            Span::styled("Will be named: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                self.tmux
+                    .cwd
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| String::from("(default by tmux)")),
+                Style::default().fg(Color::Yellow),
+            ),
+        ]);
+
         let hint = if active {
             Line::from(Span::styled(
                 "Press Enter to create",
@@ -193,7 +205,7 @@ impl App {
             Line::from("")
         };
 
-        let paragraph = Paragraph::new(vec![cwd_line, Line::from(""), hint])
+        let paragraph = Paragraph::new(vec![cwd_line, name_line, Line::from(""), hint])
             .wrap(Wrap { trim: false })
             .block(
                 Block::default()
@@ -285,11 +297,13 @@ fn main() -> anyhow::Result<()> {
             .arg(name)
             .exec()
             .into()),
-        Action::New(cwd) => Err(Command::new("tmux")
-            .arg("new-session")
-            .arg("-c")
-            .arg(cwd)
-            .exec()
-            .into()),
+        Action::New(cwd) => {
+            let mut cmd = Command::new("tmux");
+            cmd.arg("new-session").arg("-c").arg(&cwd);
+            if let Some(name) = cwd.file_name() {
+                cmd.arg("-s").arg(name);
+            }
+            Err(cmd.exec().into())
+        }
     }
 }
