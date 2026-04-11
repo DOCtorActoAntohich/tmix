@@ -7,7 +7,8 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState, Wrap};
+use tmix::{Session, Tmux};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Panel {
@@ -16,50 +17,22 @@ enum Panel {
 }
 
 enum Action {
-    Attach(String),
+    Attach(Session),
     New(PathBuf),
     Quit,
 }
 
-struct TmuxState {
-    sessions: Vec<String>,
-    cwd: PathBuf,
-}
-
-impl TmuxState {
-    fn load() -> anyhow::Result<Self> {
-        let sessions = Self::list_sessions();
-        let cwd = std::env::current_dir().context("Failed to get the current directory")?;
-        Ok(Self { sessions, cwd })
-    }
-
-    fn list_sessions() -> Vec<String> {
-        let output = Command::new("tmux")
-            .args(["list-sessions", "-F", "#{session_name}"])
-            .output();
-
-        match output {
-            Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .filter(|s| !s.is_empty())
-                .map(ToOwned::to_owned)
-                .collect(),
-            _ => vec![],
-        }
-    }
-}
-
 struct App {
-    tmux: TmuxState,
-    list_state: ListState,
+    tmux: Tmux,
+    table_state: TableState,
     focus: Panel,
 }
 
 impl App {
-    fn new(tmux: TmuxState) -> Self {
-        let mut list_state = ListState::default();
+    fn new(tmux: Tmux) -> Self {
+        let mut table_state = TableState::default();
         if !tmux.sessions.is_empty() {
-            list_state.select(Some(0));
+            table_state.select(Some(0));
         }
 
         let focus = if tmux.sessions.is_empty() {
@@ -70,16 +43,15 @@ impl App {
 
         Self {
             tmux,
-            list_state,
+            table_state,
             focus,
         }
     }
 
-    fn selected_session(&self) -> Option<&str> {
-        self.list_state
+    fn selected_session(&self) -> Option<&Session> {
+        self.table_state
             .selected()
             .and_then(|i| self.tmux.sessions.get(i))
-            .map(|s| s.as_str())
     }
 
     fn draw(&mut self, frame: &mut ratatui::Frame) {
@@ -130,16 +102,22 @@ impl App {
             Style::default().fg(Color::DarkGray)
         };
 
-        let items: Vec<ListItem> = if self.tmux.sessions.is_empty() {
-            vec![ListItem::new(Line::from(
-                Span::from("<no sessions>").style(Style::default().fg(Color::DarkGray)),
-            ))]
+        let table = if self.tmux.sessions.is_empty() {
+            let rows = [Row::new([Cell::new("<no sessions>")])];
+            let widths = [Constraint::Min(1)];
+            Table::new(rows, widths)
         } else {
-            self.tmux
+            let rows: Vec<_> = self
+                .tmux
                 .sessions
                 .iter()
-                .map(|s| ListItem::new(Line::from(s.as_str())))
-                .collect()
+                .map(|Session { name, path }| {
+                    [Cell::new(name.as_str()), Cell::new(path.to_string_lossy())]
+                })
+                .map(Row::new)
+                .collect();
+            let widths = [Constraint::Percentage(40), Constraint::Percentage(60)];
+            Table::new(rows, widths)
         };
 
         let highlight_style = if active {
@@ -151,7 +129,7 @@ impl App {
             Style::default()
         };
 
-        let list = List::new(items)
+        let table = table
             .block(
                 Block::default()
                     .title(" Attach to an existing session ")
@@ -159,10 +137,10 @@ impl App {
                     .border_type(BorderType::Rounded)
                     .border_style(border_style),
             )
-            .highlight_style(highlight_style)
+            .row_highlight_style(highlight_style)
             .highlight_symbol(if active { "> " } else { "  " });
 
-        frame.render_stateful_widget(list, area, &mut self.list_state);
+        frame.render_stateful_widget(table, area, &mut self.table_state);
     }
 
     fn draw_new_session_window(&self, frame: &mut ratatui::Frame, area: Rect) {
@@ -240,15 +218,15 @@ impl App {
                 };
             }
             KeyCode::Up if self.focus == Panel::Sessions => {
-                self.list_state.select_previous();
+                self.table_state.select_previous();
             }
             KeyCode::Down if self.focus == Panel::Sessions => {
-                self.list_state.select_next();
+                self.table_state.select_next();
             }
             KeyCode::Enter => {
                 let action = match self.focus {
                     Panel::Sessions => match self.selected_session() {
-                        Some(name) => Action::Attach(name.to_owned()),
+                        Some(session) => Action::Attach(session.to_owned()),
                         None => Action::New(self.tmux.cwd.clone()),
                     },
                     Panel::New => Action::New(self.tmux.cwd.clone()),
@@ -286,12 +264,11 @@ fn run_tui(app: &mut App) -> anyhow::Result<Action> {
 }
 
 fn main() -> anyhow::Result<()> {
-    let tmux = TmuxState::load()?;
-    let mut app = App::new(tmux);
+    let mut app = App::new(Tmux::load()?);
 
     match run_tui(&mut app)? {
         Action::Quit => Ok(()),
-        Action::Attach(name) => Err(Command::new("tmux")
+        Action::Attach(Session { name, path: _ }) => Err(Command::new("tmux")
             .arg("attach-session")
             .arg("-t")
             .arg(name)
