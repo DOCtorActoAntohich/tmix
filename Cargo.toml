@@ -7,3 +7,10 @@ edition = "2024"
 anyhow = "1"
 ratatui = "0.30"
 nom = "8"
+
+[profile.release]
+opt-level = "s"
+panic = "abort"
+strip = true
+lto = true
+codegen-units = 1
