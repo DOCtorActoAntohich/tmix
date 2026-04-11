@@ -24,7 +24,7 @@ enum Action {
 
 struct App {
     tmux: Tmux,
-    table_state: TableState,
+    sessions_table_state: TableState,
     focus: Panel,
 }
 
@@ -43,13 +43,13 @@ impl App {
 
         Self {
             tmux,
-            table_state,
+            sessions_table_state: table_state,
             focus,
         }
     }
 
     fn selected_session(&self) -> Option<&Session> {
-        self.table_state
+        self.sessions_table_state
             .selected()
             .and_then(|i| self.tmux.sessions.get(i))
     }
@@ -140,7 +140,7 @@ impl App {
             .row_highlight_style(highlight_style)
             .highlight_symbol(if active { "> " } else { "  " });
 
-        frame.render_stateful_widget(table, area, &mut self.table_state);
+        frame.render_stateful_widget(table, area, &mut self.sessions_table_state);
     }
 
     fn draw_new_session_window(&self, frame: &mut ratatui::Frame, area: Rect) {
@@ -218,10 +218,10 @@ impl App {
                 };
             }
             KeyCode::Up if self.focus == Panel::Sessions => {
-                self.table_state.select_previous();
+                self.sessions_table_state.select_previous();
             }
             KeyCode::Down if self.focus == Panel::Sessions => {
-                self.table_state.select_next();
+                self.sessions_table_state.select_next();
             }
             KeyCode::Enter => {
                 let action = match self.focus {
