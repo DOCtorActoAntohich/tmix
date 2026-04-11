@@ -4,9 +4,9 @@ use std::process::Command;
 
 use anyhow::Context;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Constraint, Direction, HorizontalAlignment, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
+use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState, Wrap};
 use tmix::{Session, Tmux};
 
@@ -112,11 +112,21 @@ impl App {
                 .sessions
                 .iter()
                 .map(|Session { name, path }| {
-                    [Cell::new(name.as_str()), Cell::new(path.to_string_lossy())]
+                    [
+                        Cell::new(name.as_str()),
+                        Cell::new(
+                            Text::from(path.to_string_lossy())
+                                .alignment(HorizontalAlignment::Right),
+                        ),
+                    ]
                 })
                 .map(Row::new)
                 .collect();
-            let widths = [Constraint::Percentage(40), Constraint::Percentage(60)];
+            let widths = [
+                Constraint::Percentage(40),
+                Constraint::Percentage(60),
+                Constraint::Length(2),
+            ];
             Table::new(rows, widths)
         };
 
