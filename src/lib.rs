@@ -1,12 +1,13 @@
-use std::{path::PathBuf, process::Command};
+use std::path::PathBuf;
+use std::process::Command;
 
 use anyhow::Context;
-use nom::{
-    IResult, Parser,
-    character::complete::{line_ending, not_line_ending},
-    multi::many0,
-    sequence::terminated,
-};
+use nom::branch::alt;
+use nom::bytes::tag;
+use nom::character::complete::{line_ending, not_line_ending};
+use nom::multi::many0;
+use nom::sequence::terminated;
+use nom::{IResult, Parser};
 
 pub struct Tmux {
     pub cwd: PathBuf,
@@ -33,15 +34,19 @@ impl Tmux {
             .output()
             .context("Failed to get command output")?;
 
-        if !output.status.success() {
-            return Err(anyhow::anyhow!(
-                "Failed to list tmux sessions: {}",
-                output.status
-            ));
+        let output = if !output.stdout.is_empty() {
+            output.stdout
+        } else {
+            output.stderr
+        };
+
+        let output = str::from_utf8(&output)
+            .context("Tmux session output wasn't a printable UTF8 string")?;
+
+        if output.starts_with("no server running on ") {
+            return Ok(Vec::default());
         }
 
-        let output = str::from_utf8(&output.stdout)
-            .context("Tmux session output wasn't a printable UTF8 string")?;
         let (rest, sessions) =
             all_session_names(output).map_err(|_| anyhow::anyhow!("Failed to parse output"))?;
         if !rest.is_empty() {
@@ -64,6 +69,15 @@ fn session_name(input: &str) -> IResult<&str, Session> {
     ))
 }
 
-fn all_session_names(input: &str) -> IResult<&str, Vec<Session>> {
+fn many_session_names(input: &str) -> IResult<&str, Vec<Session>> {
     many0(session_name).parse(input)
+}
+
+fn dead_daemon_error_message(input: &str) -> IResult<&str, Vec<Session>> {
+    let (input, _tag) = tag("no server running on ").parse(input)?;
+    Ok((input, Vec::default()))
+}
+
+fn all_session_names(input: &str) -> IResult<&str, Vec<Session>> {
+    alt((dead_daemon_error_message, many_session_names)).parse(input)
 }
