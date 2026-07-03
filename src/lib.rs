@@ -43,10 +43,6 @@ impl Tmux {
         let output = str::from_utf8(&output)
             .context("Tmux session output wasn't a printable UTF8 string")?;
 
-        if output.starts_with("no server running on ") {
-            return Ok(Vec::default());
-        }
-
         let (rest, sessions) =
             all_session_names(output).map_err(|_| anyhow::anyhow!("Failed to parse output"))?;
         if !rest.is_empty() {
@@ -73,9 +69,10 @@ fn many_session_names(input: &str) -> IResult<&str, Vec<Session>> {
     many0(session_name).parse(input)
 }
 
+/// Nothing to parse when there's the error message
 fn dead_daemon_error_message(input: &str) -> IResult<&str, Vec<Session>> {
-    let (input, _tag) = tag("no server running on ").parse(input)?;
-    Ok((input, Vec::default()))
+    let (_input, _tag) = tag("no server running on ").parse(input)?;
+    Ok(("", Vec::default()))
 }
 
 fn all_session_names(input: &str) -> IResult<&str, Vec<Session>> {
