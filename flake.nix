@@ -37,7 +37,7 @@
         ];
         pkgs = import nixpkgs { inherit system overlays; };
 
-        musl-pkgs = if pkgs.stdenv.isLinux then pkgs.pkgsMusl else pkgs;
+        musl-pkgs = if pkgs.stdenv.hostPlatform.isLinux then pkgs.pkgsMusl else pkgs;
         rust-stable = pkgs.rust-bin.stable."1.98.0".minimal;
         rust = {
           dev = rust-stable.override {
@@ -55,7 +55,7 @@
             ];
           };
           build = rust-stable.override {
-            targets = pkgs.lib.optionals pkgs.stdenv.isLinux [
+            targets = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [
               pkgs.pkgsMusl.stdenv.hostPlatform.rust.rustcTarget
             ];
           };
