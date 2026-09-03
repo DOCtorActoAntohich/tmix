@@ -71,7 +71,8 @@ fn many_session_names(input: &str) -> IResult<&str, Vec<Session>> {
 
 /// Nothing to parse when there's the error message
 fn dead_daemon_error_message(input: &str) -> IResult<&str, Vec<Session>> {
-    let (_input, _tag) = tag("no server running on ").parse(input)?;
+    let (_input, _tag) =
+        alt((tag("no server running on "), tag("error connecting"))).parse(input)?;
     Ok(("", Vec::default()))
 }
 
