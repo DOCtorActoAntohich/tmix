@@ -38,7 +38,7 @@
         pkgs = import nixpkgs { inherit system overlays; };
 
         musl-pkgs = if pkgs.stdenv.isLinux then pkgs.pkgsMusl else pkgs;
-        rust-stable = pkgs.rust-bin.stable."1.96.0".minimal;
+        rust-stable = pkgs.rust-bin.stable."1.98.0".minimal;
         rust = {
           dev = rust-stable.override {
             extensions = [
