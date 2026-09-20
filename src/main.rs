@@ -7,7 +7,7 @@ use ratatui::layout::{Constraint, Direction, HorizontalAlignment, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState, Wrap};
-use tmix::{Session, SessionName, Tmux};
+use tmix::{Session, Tmux};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Panel {
