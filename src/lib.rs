@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -16,8 +17,38 @@ pub struct Tmux {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Session {
-    pub name: String,
+    pub name: SessionName,
     pub path: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionName(String);
+
+impl SessionName {
+    pub fn new_normalized(s: impl AsRef<str>) -> Self {
+        let name = s
+            .as_ref()
+            .chars()
+            .map(|c| match c {
+                '.' => '-',
+                ':' => '-',
+                other => other,
+            })
+            .collect();
+        Self(name)
+    }
+
+    pub fn as_str(&self) -> &str {
+        let Self(name) = self;
+        name.as_str()
+    }
+}
+
+impl AsRef<OsStr> for SessionName {
+    fn as_ref(&self) -> &OsStr {
+        let Self(name) = self;
+        name.as_ref()
+    }
 }
 
 impl Tmux {
@@ -59,7 +90,7 @@ fn session_name(input: &str) -> IResult<&str, Session> {
     Ok((
         input,
         Session {
-            name: name.to_owned(),
+            name: SessionName::new_normalized(name),
             path: path.into(),
         },
     ))
