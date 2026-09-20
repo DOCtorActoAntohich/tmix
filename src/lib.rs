@@ -11,7 +11,7 @@ use nom::sequence::terminated;
 use nom::{IResult, Parser};
 
 pub struct Tmux {
-    pub cwd: PathBuf,
+    pub cwd_session: Session,
     pub sessions: Vec<Session>,
 }
 
@@ -23,6 +23,12 @@ pub struct Session {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionName(String);
+
+impl Default for SessionName {
+    fn default() -> Self {
+        Self("default".to_owned())
+    }
+}
 
 impl SessionName {
     pub fn new_normalized(s: impl AsRef<str>) -> Self {
@@ -53,9 +59,23 @@ impl AsRef<OsStr> for SessionName {
 
 impl Tmux {
     pub fn load() -> anyhow::Result<Self> {
-        let sessions = Self::list_sessions()?;
         let cwd = std::env::current_dir().context("Failed to get the current directory")?;
-        Ok(Self { sessions, cwd })
+        let sessions = Self::list_sessions()?;
+
+        let here_name = cwd
+            .file_name()
+            .map(OsStr::to_string_lossy)
+            .map(SessionName::new_normalized)
+            .unwrap_or_default();
+        let cwd_session = Session {
+            name: here_name,
+            path: cwd,
+        };
+
+        Ok(Self {
+            cwd_session,
+            sessions,
+        })
     }
 
     pub fn list_sessions() -> anyhow::Result<Vec<Session>> {

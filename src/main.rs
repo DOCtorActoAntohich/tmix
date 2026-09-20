@@ -165,7 +165,7 @@ impl App {
         let cwd_line = Line::from(vec![
             Span::styled("At path:  ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                self.tmux.cwd.display().to_string(),
+                self.tmux.cwd_session.path.display().to_string(),
                 Style::default().fg(Color::Green),
             ),
         ]);
@@ -173,11 +173,7 @@ impl App {
         let name_line = Line::from(vec![
             Span::styled("Will be named: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                self.tmux
-                    .cwd
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| String::from("(default by tmux)")),
+                self.tmux.cwd_session.name.as_str(),
                 Style::default().fg(Color::Yellow),
             ),
         ]);
@@ -237,9 +233,9 @@ impl App {
                 let action = match self.focus {
                     Panel::Sessions => match self.selected_session() {
                         Some(session) => Action::Attach(session.to_owned()),
-                        None => Action::New(self.tmux.cwd.clone()),
+                        None => Action::New(self.tmux.cwd_session.path.clone()),
                     },
-                    Panel::New => Action::New(self.tmux.cwd.clone()),
+                    Panel::New => Action::New(self.tmux.cwd_session.path.clone()),
                 };
                 return Some(action);
             }
