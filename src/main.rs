@@ -1,5 +1,4 @@
 use std::os::unix::process::CommandExt;
-use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::Context;
@@ -8,7 +7,7 @@ use ratatui::layout::{Constraint, Direction, HorizontalAlignment, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState, Wrap};
-use tmix::{Session, Tmux};
+use tmix::{Session, SessionName, Tmux};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Panel {
@@ -18,7 +17,7 @@ enum Panel {
 
 enum Action {
     Attach(Session),
-    New(PathBuf),
+    New(Session),
     Quit,
 }
 
@@ -233,9 +232,9 @@ impl App {
                 let action = match self.focus {
                     Panel::Sessions => match self.selected_session() {
                         Some(session) => Action::Attach(session.to_owned()),
-                        None => Action::New(self.tmux.cwd_session.path.clone()),
+                        None => Action::New(self.tmux.cwd_session.clone()),
                     },
-                    Panel::New => Action::New(self.tmux.cwd_session.path.clone()),
+                    Panel::New => Action::New(self.tmux.cwd_session.clone()),
                 };
                 return Some(action);
             }
@@ -280,12 +279,13 @@ fn main() -> anyhow::Result<()> {
             .arg(name)
             .exec()
             .into()),
-        Action::New(cwd) => {
+        Action::New(Session { name, path }) => {
             let mut cmd = Command::new("tmux");
-            cmd.arg("new-session").arg("-c").arg(&cwd);
-            if let Some(name) = cwd.file_name() {
-                cmd.arg("-s").arg(name);
-            }
+            cmd.arg("new-session")
+                .arg("-c")
+                .arg(path)
+                .arg("-s")
+                .arg(name);
             Err(cmd.exec().into())
         }
     }
