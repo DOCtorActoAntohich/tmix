@@ -248,13 +248,16 @@ impl App {
             }
             KeyCode::Esc if self.search.is_empty() => return Some(Action::Quit),
             KeyCode::Esc => {
+                self.focus = Panel::Sessions;
                 self.search.clear();
             }
             KeyCode::Char(ch) if !self.tmux.sessions.is_empty() => {
+                self.focus = Panel::Sessions;
                 self.search.push(ch);
                 self.reselect();
             }
             KeyCode::Backspace => {
+                self.focus = Panel::Sessions;
                 self.search.pop();
                 self.reselect();
             }
@@ -276,16 +279,16 @@ impl App {
             KeyCode::Down if self.focus == Panel::Sessions => {
                 self.sessions_table_state.select_next();
             }
-            KeyCode::Enter if !self.search.sessions().is_empty() => {
-                let action = match self.focus {
-                    Panel::Sessions => match self.selected_session() {
-                        Some(session) => Action::Attach(session.to_owned()),
-                        None => Action::New(self.tmux.cwd_session.clone()),
-                    },
-                    Panel::New => Action::New(self.tmux.cwd_session.clone()),
-                };
-                return Some(action);
-            }
+            KeyCode::Enter => match self.focus {
+                Panel::New => return Some(Action::New(self.tmux.cwd_session.clone())),
+                Panel::Sessions if !self.search.sessions().is_empty() => {
+                    match self.selected_session() {
+                        Some(session) => return Some(Action::Attach(session.to_owned())),
+                        None => return Some(Action::New(self.tmux.cwd_session.clone())),
+                    }
+                }
+                _ => {}
+            },
             _ => {}
         }
 
