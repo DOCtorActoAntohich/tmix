@@ -149,19 +149,29 @@ impl App {
         } else {
             let rows = sessions
                 .into_iter()
-                .map(|(session, range)| {
+                .enumerate()
+                .map(|(ith, (session, range))| {
                     let Session { name, path } = session;
+                    let is_highlighted = Some(ith) == self.sessions_table_state.selected();
+                    let fg_color = if is_highlighted {
+                        Color::Black
+                    } else {
+                        Color::White
+                    };
                     let name = match range {
                         Some(range) => Line::from(vec![
-                            Span::raw(&name.as_str()[..range.start]),
+                            Span::raw(&name.as_str()[..range.start])
+                                .style(Style::default().fg(fg_color)),
                             Span::raw(&name.as_str()[range.clone()])
                                 .style(Style::default().fg(Color::Yellow)),
-                            Span::raw(&name.as_str()[range.end..]),
+                            Span::raw(&name.as_str()[range.end..])
+                                .style(Style::default().fg(fg_color)),
                         ]),
-                        None => Line::from(name.as_str()),
+                        None => Line::from(name.as_str()).style(Style::default().fg(fg_color)),
                     };
-                    let path =
-                        Text::from(path.to_string_lossy()).alignment(HorizontalAlignment::Right);
+                    let path = Text::from(path.to_string_lossy())
+                        .alignment(HorizontalAlignment::Right)
+                        .style(Style::default().fg(fg_color));
                     [Cell::new(name), Cell::new(path)]
                 })
                 .map(Row::new);
@@ -171,12 +181,14 @@ impl App {
 
         let highlight_style = if active {
             Style::default()
-                .fg(Color::Black)
                 .bg(Color::Cyan)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
         };
+
+        let highlight_symbol =
+            Text::raw(if active { "> " } else { "  " }).style(Style::default().fg(Color::Black));
 
         let table = table
             .block(
@@ -187,7 +199,7 @@ impl App {
                     .border_style(border_style),
             )
             .row_highlight_style(highlight_style)
-            .highlight_symbol(if active { "> " } else { "  " });
+            .highlight_symbol(highlight_symbol);
 
         frame.render_stateful_widget(table, area, &mut self.sessions_table_state);
     }
@@ -275,9 +287,11 @@ impl App {
             }
             KeyCode::Up if self.focus == Panel::Sessions => {
                 self.sessions_table_state.select_previous();
+                self.reselect();
             }
             KeyCode::Down if self.focus == Panel::Sessions => {
                 self.sessions_table_state.select_next();
+                self.reselect();
             }
             KeyCode::Enter => match self.focus {
                 Panel::New => return Some(Action::New(self.tmux.cwd_session.clone())),
@@ -302,7 +316,7 @@ impl App {
                 .subset()
                 .map(|filtered| filtered.len())
                 .and_then(NonZero::new)
-                .map(|filtered| filtered.get().min(current))
+                .map(|filtered| filtered.get().saturating_sub(1).min(current))
                 .unwrap_or(current)
         });
         self.sessions_table_state.select(to_select);
