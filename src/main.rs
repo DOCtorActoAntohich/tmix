@@ -1,3 +1,5 @@
+use std::num::NonZero;
+use std::ops::Range;
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 
@@ -7,7 +9,7 @@ use ratatui::layout::{Constraint, Direction, HorizontalAlignment, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState, Wrap};
-use tmix::{Session, Tmux};
+use tmix::{Search, Session, Tmux};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Panel {
@@ -25,13 +27,14 @@ struct App {
     tmux: Tmux,
     sessions_table_state: TableState,
     focus: Panel,
+    search: Search,
 }
 
 impl App {
     fn new(tmux: Tmux) -> Self {
-        let mut table_state = TableState::default();
+        let mut sessions_table_state = TableState::default();
         if !tmux.sessions.is_empty() {
-            table_state.select(Some(0));
+            sessions_table_state.select(Some(0));
         }
 
         let focus = if tmux.sessions.is_empty() {
@@ -40,17 +43,23 @@ impl App {
             Panel::Sessions
         };
 
+        let search = Search::new(&tmux.sessions);
+
         Self {
             tmux,
-            sessions_table_state: table_state,
+            sessions_table_state,
             focus,
+            search,
         }
     }
 
     fn selected_session(&self) -> Option<&Session> {
         self.sessions_table_state
             .selected()
-            .and_then(|i| self.tmux.sessions.get(i))
+            .and_then(|i| match self.search.sessions() {
+                tmix::Filtered::Original(sessions) => sessions.get(i),
+                tmix::Filtered::Subset(items) => items.get(i).map(|(s, _)| s),
+            })
     }
 
     fn draw(&mut self, frame: &mut ratatui::Frame) {
@@ -64,14 +73,32 @@ impl App {
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
             .areas::<2>(main_area);
 
-        self.draw_sessions_list(frame, session_list_area);
+        let [sessions_area, search_item_area] = if self.search.is_empty() {
+            [session_list_area, Rect::default()]
+        } else {
+            Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(1), Constraint::Length(1)])
+                .areas::<2>(session_list_area)
+        };
+
+        self.draw_sessions_list(frame, sessions_area);
         self.draw_new_session_window(frame, new_session_area);
         self.draw_help_bar(frame, help_bar_area);
+        self.draw_search_item(frame, search_item_area);
+    }
+
+    fn draw_search_item(&self, frame: &mut ratatui::Frame, area: Rect) {
+        let mut line = Line::default();
+        line.push_span("Searching: ");
+        line.push_span(self.search.as_str());
+
+        frame.render_widget(line, area);
     }
 
     fn draw_help_bar(&self, frame: &mut ratatui::Frame, area: Rect) {
         let bindings: &[(&str, &str)] = &[
-            ("Q / Esc", "Quit"),
+            ("Esc", "Quit"),
             ("↑↓", "Navigate"),
             ("Tab / ←→", "Switch panel"),
             ("Enter", "Confirm"),
@@ -101,32 +128,45 @@ impl App {
             Style::default().fg(Color::DarkGray)
         };
 
-        let table = if self.tmux.sessions.is_empty() {
+        let table_widths = [
+            Constraint::Percentage(40),
+            Constraint::Percentage(60),
+            Constraint::Length(2),
+        ];
+
+        let sessions: Vec<(&Session, Option<Range<usize>>)> = match self.search.sessions() {
+            any if any.is_empty() => Vec::new(),
+            tmix::Filtered::Original(sessions) => sessions.iter().map(|s| (s, None)).collect(),
+            tmix::Filtered::Subset(items) => {
+                items.iter().map(|(s, r)| (s, Some(r.clone()))).collect()
+            }
+        };
+
+        let table = if sessions.is_empty() {
             let rows = [Row::new([Cell::new("<no sessions>")])];
             let widths = [Constraint::Min(1)];
             Table::new(rows, widths)
         } else {
-            let rows: Vec<_> = self
-                .tmux
-                .sessions
-                .iter()
-                .map(|Session { name, path }| {
-                    [
-                        Cell::new(name.as_str()),
-                        Cell::new(
-                            Text::from(path.to_string_lossy())
-                                .alignment(HorizontalAlignment::Right),
-                        ),
-                    ]
+            let rows = sessions
+                .into_iter()
+                .map(|(session, range)| {
+                    let Session { name, path } = session;
+                    let name = match range {
+                        Some(range) => Line::from(vec![
+                            Span::raw(&name.as_str()[..range.start]),
+                            Span::raw(&name.as_str()[range.clone()])
+                                .style(Style::default().fg(Color::Yellow)),
+                            Span::raw(&name.as_str()[range.end..]),
+                        ]),
+                        None => Line::from(name.as_str()),
+                    };
+                    let path =
+                        Text::from(path.to_string_lossy()).alignment(HorizontalAlignment::Right);
+                    [Cell::new(name), Cell::new(path)]
                 })
-                .map(Row::new)
-                .collect();
-            let widths = [
-                Constraint::Percentage(40),
-                Constraint::Percentage(60),
-                Constraint::Length(2),
-            ];
-            Table::new(rows, widths)
+                .map(Row::new);
+
+            Table::new(rows, table_widths)
         };
 
         let highlight_style = if active {
@@ -202,14 +242,22 @@ impl App {
     }
 
     fn handle_key(&mut self, key: ratatui::crossterm::event::KeyEvent) -> Option<Action> {
-        if key.code == KeyCode::Char('q')
-            || key.code == KeyCode::Esc
-            || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
-        {
-            return Some(Action::Quit);
-        }
-
         match key.code {
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return Some(Action::Quit);
+            }
+            KeyCode::Esc if self.search.is_empty() => return Some(Action::Quit),
+            KeyCode::Esc => {
+                self.search.clear();
+            }
+            KeyCode::Char(ch) if !self.tmux.sessions.is_empty() => {
+                self.search.push(ch);
+                self.reselect();
+            }
+            KeyCode::Backspace => {
+                self.search.pop();
+                self.reselect();
+            }
             KeyCode::Tab | KeyCode::Left | KeyCode::Right => {
                 self.focus = match self.focus {
                     Panel::Sessions => Panel::New,
@@ -228,7 +276,7 @@ impl App {
             KeyCode::Down if self.focus == Panel::Sessions => {
                 self.sessions_table_state.select_next();
             }
-            KeyCode::Enter => {
+            KeyCode::Enter if !self.search.sessions().is_empty() => {
                 let action = match self.focus {
                     Panel::Sessions => match self.selected_session() {
                         Some(session) => Action::Attach(session.to_owned()),
@@ -242,6 +290,19 @@ impl App {
         }
 
         None
+    }
+
+    fn reselect(&mut self) {
+        let to_select = self.sessions_table_state.selected().map(|current| {
+            self.search
+                .sessions()
+                .subset()
+                .map(|filtered| filtered.len())
+                .and_then(NonZero::new)
+                .map(|filtered| filtered.get().min(current))
+                .unwrap_or(current)
+        });
+        self.sessions_table_state.select(to_select);
     }
 
     fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> anyhow::Result<Action> {

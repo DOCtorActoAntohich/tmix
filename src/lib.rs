@@ -1,4 +1,9 @@
+mod search;
+
+pub use crate::search::{Filtered, Search};
+
 use std::ffi::OsStr;
+use std::ops::Range;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -47,6 +52,12 @@ impl SessionName {
     pub fn as_str(&self) -> &str {
         let Self(name) = self;
         name.as_str()
+    }
+
+    pub fn find_substr(&self, sub: &str) -> Option<Range<usize>> {
+        self.as_str()
+            .find(sub)
+            .map(|start| start..start + sub.len())
     }
 }
 
