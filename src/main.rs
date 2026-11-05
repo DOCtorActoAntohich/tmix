@@ -153,11 +153,12 @@ impl App {
                 .map(|(ith, (session, range))| {
                     let Session { name, path } = session;
                     let is_highlighted = Some(ith) == self.sessions_table_state.selected();
-                    let fg_color = if is_highlighted {
+                    let fg_color = if active && is_highlighted {
                         Color::Black
                     } else {
                         Color::White
                     };
+
                     let name = match range {
                         Some(range) => Line::from(vec![
                             Span::raw(&name.as_str()[..range.start])
